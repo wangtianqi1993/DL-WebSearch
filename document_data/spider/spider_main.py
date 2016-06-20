@@ -22,19 +22,22 @@ class SpiderMain:
                 print 'craw %d: %s' % (count, new_url)
                 html_cont = self.downloader.download(new_url)
                 new_urls, new_data = self.parser.parse(new_url, html_cont)
+                # get new url
                 self.urls.add_new_urls(new_urls)
+                # get answer and question
                 self.outputer.collect_data(new_data)
-                if count == 35:
+                if count == 500:
                     break
                 count = count + 1
             except IOError, e:
                 print e
                 print 'craw failed'
+        # save the answer and question
         self.outputer.output_html()
 
 
 print dir(__name__)
 if __name__ == '__main__':
-    root_url = "http://zhidao.baidu.com/link?url=fUfBjU9onhDdg6WgOyiE55lGwoAbDJRb5YO-rYwIyI4un1dy9vqWv21ZR-Opta7qKhns8hQtIizVi0FUHw68Ka"
+    root_url = "http://zhidao.baidu.com/link?url=I8P646857rI63gKIx2xt82_M2XgzrF0xl5CEpz5tDQYGCBhfgrLr2uE0tvtL6CS6bM-KNH5hnnKuSHPvnINdh5SH3smMUo5Opm4DPFYW_oi"
     spider = SpiderMain()
     spider.craw(root_url)

@@ -22,6 +22,8 @@ class HtmlOutputer(object):
             # fout.write('\n')
             fout.write(data['title'].encode('utf-8'))
             fout.write('\n')
+
+            # 一个item对应一个answer
             for item in data["summary"]:
                 fout.write(item.encode('utf-8'))
                 fout.write('\n')
