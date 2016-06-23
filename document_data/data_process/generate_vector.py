@@ -119,9 +119,12 @@ if __name__ == "__main__":
     # split_document()
     # get_voc_list()
     # generate_vocabulary_list()
-    create_query_doc_vector()
+    # create_query_doc_vector()
 
-    # db = client.webSearch
+    db = client.webSearch
+    item = db.voc_list.find()
+    item = item[0]['vocabulary_list']
+    print len(item)
     # item = db.query_answer_vector.find()
     # for i in item[0]['answer']:
     #     print i
