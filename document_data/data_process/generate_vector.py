@@ -1,26 +1,31 @@
 # !/usr/bin/env python
-# -*-coding: utf-8-*-
+# -*- coding: utf-8 -*-
 
 __author__ = 'wtq'
 
-import re
 import sys
 import jieba
-import string
 from document_data.data_process.conn_mongo import conn_mongo
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
 client = conn_mongo()
 
+document_list = ['data1_education.txt', 'data2_shopping_online.txt', 'data3_basketball.txt', 'data4_ware.txt',
+                 'data5_life.txt',
+                 'data6_economic.txt', 'data7_law.txt', 'data8_culture.txt', 'data9_science.txt',
+                 'data10_entertainment.txt']
+
 
 def is_chinese(uchar):
+    """
+    判断一个unicode是否是汉字,过滤掉除汉字外的其他字符
+    """
 
-        """判断一个unicode是否是汉字,过滤掉除汉字外的其他字符"""
-        if uchar >= u'\u4e00' and uchar <= u'\u9fa5':
-                return True
-        else:
-                return False
+    if uchar >= u'\u4e00' and uchar <= u'\u9fa5':
+        return True
+    else:
+        return False
 
 
 def generate_vocabulary_list():
@@ -29,27 +34,40 @@ def generate_vocabulary_list():
     :return:
     """
     db = client.webSearch
-    vocab_set = list()
+    vocab_list = list()
+    vocab_dict = dict()
 
-    document_list = ['data1_education.txt', 'data2_shopping_online.txt', 'data3_basketball.txt', 'data4_ware.txt', 'data5_life.txt',
-                     'data6_economic.txt', 'data7_law.txt', 'data8_culture.txt', 'data9_science.txt', 'data10_entertainment.txt']
+    try:
 
-    for item1 in document_list:
-        with open('/home/wtq/develop/workspace/github/DL-WebSearch/document_data/train_data/' + item1, 'r') as files:
-            words = files.read()
-            # using jieba to cut words in search engine model
-            words = jieba.cut_for_search(words)
-            for item2 in words:
-                if is_chinese(item2):
-                    if item2 not in vocab_set:
-                        vocab_set.append(item2)
-        print len(vocab_set)
+        for item1 in document_list:
+            with open('/home/wtq/develop/workspace/github/DL-WebSearch/document_data/train_data/' + item1,
+                      'r') as files:
+                words = files.read()
+                # using jieba to cut words
+                words = jieba.cut(words)
+                for item2 in words:
+                    if is_chinese(item2):
+                        if item2 not in vocab_dict:
+                            vocab_dict[item2] = 0
+                        vocab_dict[item2] += 1
 
-    # write vocab_list to mongoDB
-    mongo_item = {
-        "vocabulary_list": vocab_set
-    }
-    db.voc_list.insert(mongo_item)
+        # 取中vocab_dict出现次数最多的前30000个词作为词表
+        for value in sorted(vocab_dict.values(), reverse=True):
+            print value
+            for key in vocab_dict:
+                if vocab_dict[key] == value:
+                    vocab_list.append(key)
+            if len(vocab_list) > 30000:
+                break
+
+        # write vocab_list to mongoDB
+        mongo_item = {
+            "vocabulary_list": vocab_list
+        }
+        db.voc_list.insert(mongo_item)
+
+    except Exception, e:
+        print 'error', e
 
 
 def generate_vector(object_words, words_list):
@@ -58,10 +76,10 @@ def generate_vector(object_words, words_list):
     it is the set of words model
     :return:
     """
-    feature_vector = [0]*len(words_list)
+    feature_vector = [0] * len(words_list)
     for word in object_words:
         if word in words_list:
-            feature_vector[words_list.index(word)] = 1
+            feature_vector[words_list.index(word)] += 1
     return feature_vector
 
 
@@ -74,20 +92,17 @@ def create_query_doc_vector():
     voc_list = db.voc_list.find()
     voc_list = voc_list[0]['vocabulary_list']
     question_sign = ['百度', '知道']
-    frist = 1
-    item = []
-
     question = []
     answer = []
 
-    document_list = ['data1_education.txt', 'data2_shopping_online.txt', 'data3_basketball.txt', 'data4_ware.txt', 'data5_life.txt',
-                     'data6_economic.txt', 'data7_law.txt', 'data8_culture.txt', 'data9_science.txt', 'data10_entertainment.txt']
-    for item1 in document_list:
-        with open('/home/wtq/develop/workspace/github/DL-WebSearch/document_data/train_data/' + item1, 'r') as files:
+    try:
+        for item1 in document_list:
+            with open('/home/wtq/develop/workspace/github/DL-WebSearch/document_data/train_data/' + item1,
+                      'r') as files:
 
                 lines = files.readlines()
                 for line in lines:
-                    line = list(jieba.cut_for_search(line))
+                    line = list(jieba.cut(line))
                     temp = []
 
                     # 去掉非汉字
@@ -96,35 +111,62 @@ def create_query_doc_vector():
                             temp.append(item)
 
                     if len(temp) >= 2:
-
                         # check if the line is a query
                         if temp[-2] == question_sign[0] and temp[-1] == question_sign[1]:
-
                             question = generate_vector(temp, voc_list)
-                            # question = generate_vector(temp, voc_list)
 
                         # else is a answer
                         else:
                             answer = generate_vector(temp, voc_list)
                             # write the query answer pair to mongo
                             mongo_item = {
-                                   "query": question,
-                                   "answer": answer
+                                "query": question,
+                                "answer": answer
                             }
                             db.query_answer_vector.insert(mongo_item)
-                            # answer.append(generate_vector(temp, voc_list))
+
+    except Exception, e:
+        print 'error', e
+
+
+def gen_query_docu_score():
+    """
+    产生每个query对应的在文档集合中相关分数,such as [0.5, 0.5, 0 , 0 ,......0]
+    :return:
+    """
+
+    db = client.webSearch
+    querys = []
+    # 将样本中的问题存储到querys[]中
+    for item in db.query_answer_vector.find():
+        if item['query'] not in querys:
+            querys.append(item['query'])
+
+    documents = db.query_answer_vector.find()
+
+    for item1 in querys:
+
+        similar_score = [0]*(db.query_answer_vector.find().count())
+        sum = 0
+        indexes = []
+        for i in range(0, db.query_answer_vector.find().count()):
+            if item1 == documents[i]['query']:
+                indexes.append(i)
+                sum += 1
+
+        # 将该查询（item1）对应的答案位置标为1／sum
+        for i in indexes:
+            similar_score[i] = 1.0/sum
+            print 1.0/sum
+        mongo_item = {
+            "query": item1,
+            "similar_score": similar_score
+        }
+        db.query_doc_similar.insert(mongo_item)
 
 
 if __name__ == "__main__":
-    # split_document()
     # get_voc_list()
     # generate_vocabulary_list()
     # create_query_doc_vector()
-
-    db = client.webSearch
-    item = db.voc_list.find()
-    item = item[0]['vocabulary_list']
-    print len(item)
-    # item = db.query_answer_vector.find()
-    # for i in item[0]['answer']:
-    #     print i
+    gen_query_docu_score()
