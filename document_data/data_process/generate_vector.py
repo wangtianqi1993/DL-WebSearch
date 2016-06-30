@@ -5,6 +5,7 @@ __author__ = 'wtq'
 
 import sys
 import jieba
+import numpy as np
 from document_data.data_process.conn_mongo import conn_mongo
 
 reload(sys)
@@ -170,3 +171,7 @@ if __name__ == "__main__":
     # generate_vocabulary_list()
     # create_query_doc_vector()
     gen_query_docu_score()
+
+
+
+
