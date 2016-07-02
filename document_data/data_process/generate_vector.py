@@ -52,13 +52,13 @@ def generate_vocabulary_list():
                             vocab_dict[item2] = 0
                         vocab_dict[item2] += 1
 
-        # 取中vocab_dict出现次数最多的前30000个词作为词表
+        # 取中vocab_dict出现次数最多的前10000个词作为词表
         for value in sorted(vocab_dict.values(), reverse=True):
             print value
             for key in vocab_dict:
                 if vocab_dict[key] == value:
                     vocab_list.append(key)
-            if len(vocab_list) > 30000:
+            if len(vocab_list) > 3000:
                 break
 
         # write vocab_list to mongoDB
@@ -130,6 +130,18 @@ def create_query_doc_vector():
         print 'error', e
 
 
+# get the element index in list
+def indices(lst, element):
+    result = []
+    offset = -1
+    while True:
+        try:
+            offset = lst.index(element, offset+1)
+        except ValueError:
+            return result
+        result.append(offset)
+
+
 def gen_query_docu_score():
     """
     产生每个query对应的在文档集合中相关分数,such as [0.5, 0.5, 0 , 0 ,......0]
@@ -143,22 +155,20 @@ def gen_query_docu_score():
         if item['query'] not in querys:
             querys.append(item['query'])
 
-    documents = db.query_answer_vector.find()
+    documents = []
+    for item in db.query_answer_vector.find():
+        documents.append(item['query'])
 
     for item1 in querys:
-
-        similar_score = [0]*(db.query_answer_vector.find().count())
-        sum = 0
-        indexes = []
-        for i in range(0, db.query_answer_vector.find().count()):
-            if item1 == documents[i]['query']:
-                indexes.append(i)
-                sum += 1
+        # 得到该query对应的所有document在整个集合中的位置
+        similar_score = [0]*len(documents)
+        indexes = indices(documents, item1)
 
         # 将该查询（item1）对应的答案位置标为1／sum
         for i in indexes:
-            similar_score[i] = 1.0/sum
-            print 1.0/sum
+            similar_score[i] = 1.0/len(indexes)
+            print i
+        print 'one'
         mongo_item = {
             "query": item1,
             "similar_score": similar_score
@@ -172,6 +182,8 @@ if __name__ == "__main__":
     # create_query_doc_vector()
     gen_query_docu_score()
 
-
+    # db = client.webSearch
+    # a = db.voc_list.find()
+    # print len(a[0]['vocabulary_list'])
 
 

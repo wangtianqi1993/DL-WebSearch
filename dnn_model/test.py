@@ -22,6 +22,17 @@ __author__ = 'wtq'
 #   result = sess.run(score, feed_dict={q: query})
 #   print result
 
-a = [1, 2, 34]
+a = [1, 2, 34, 3, 2, 4, 2]
 a = map(float, a)
 print a
+
+def indices(lst, element):
+    result = []
+    offset = -1
+    while True:
+        try:
+            offset = lst.index(element, offset+1)
+        except ValueError:
+            return result
+        result.append(offset)
+print indices(a, 2)
