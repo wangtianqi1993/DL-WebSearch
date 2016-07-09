@@ -13,18 +13,22 @@ db = client.webSearch
 
 
 # Parameters
-learning_rate = 0.1
-training_epochs = 15
+# learning rate decay by steps
+start_learning_rate = 0.1
+global_step = tf.Variable(0, trainable=False)
+learning_rate = tf.train.exponential_decay(start_learning_rate,
+                                           global_step, 100000, 0.96, staircase=True)
+training_epochs = 100
 batch_size = 10
 display_step = 1
 
 # Network Parameters
-n_hidden_1 = 500
+n_hidden_1 = 200
 n_hidden_2 = 500
-n_input = 3004
+n_input = 1001
 # n_classes = 16491
 score_len = 16456
-n_classes = 128
+n_classes = 64
 
 # tf Graph input
 query = tf.placeholder('float', [None, n_input])
@@ -34,9 +38,9 @@ drop_prob = tf.placeholder("float")
 
 # Store layers weights & bias
 weights = {
-    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
-    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_hidden_2, n_classes]))
+    'h1': tf.Variable(tf.random_uniform([n_input, n_hidden_1], -tf.sqrt(6.0/(n_input+n_classes)), tf.sqrt(6.0/(n_input+n_classes))), tf.float32),
+    'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2], -tf.sqrt(6.0/(n_input+n_classes)), tf.sqrt(6.0/(n_input+n_classes)), tf.float32)),
+    'out': tf.Variable(tf.random_uniform([n_hidden_2, n_classes], -tf.sqrt(6.0/(n_input+n_classes)), tf.sqrt(6.0/(n_input+n_classes)), tf.float32))
 }
 biases = {
     'b1': tf.Variable(tf.random_normal([n_hidden_1])),
@@ -79,10 +83,10 @@ def multilayer_perceptron(x, weights, biases):
     layer_2 = tf.nn.relu(layer_2)
 
     # using drop out
-    layer2_drop = tf.nn.dropout(layer_2, drop_prob)
+    # layer2_drop = tf.nn.dropout(layer_2, drop_prob)
 
     # Output layer with linear activation
-    out_layer = tf.add(tf.matmul(layer2_drop, weights['out']), biases['out'])
+    out_layer = tf.add(tf.matmul(layer_2, weights['out']), biases['out'])
     return out_layer
 
 
@@ -101,12 +105,12 @@ normal_document = document_matrix / norm2
 
 # Define loss and optimizer
 
-similar_score = tf.nn.softmax(0.6*tf.matmul(normal_query, normal_document, transpose_b=True))
-entropy = true_score*tf.log(similar_score)
-cross_entropy = -tf.reduce_sum(entropy)
-# cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(similar_score, true_score))
-
-optimizer = tf.train.AdagradOptimizer(learning_rate=learning_rate).minimize(cross_entropy)
+similar_score = tf.nn.softmax(tf.matmul(normal_query, normal_document, transpose_b=True))
+# entropy = true_score*tf.log(similar_score)
+# cross_entropy = -tf.reduce_sum(entropy)
+# cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(similar_score, true_score))
+score_distance = tf.reduce_sum(tf.square(similar_score - true_score))
+optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(score_distance, global_step=global_step)
 
 # Initializing the variables
 init = tf.initialize_all_variables()
@@ -123,13 +127,10 @@ with tf.Session() as sess:
         # 这里可以一条一条的加载query
         # for items in db.query_doc_similar.find():
         for i in range(0, len(all_query)):
-            # i = 0
-            # i += 1
-            # if i > 20:
-            #     break
+
             query_item = []
             label_score = []
-            print 'in session'
+
             # Run optimization op (backprop) and cost op (to get loss value)
             for j in range(0, len(all_query[i])):
                 q = all_query[i][j]
@@ -139,8 +140,8 @@ with tf.Session() as sess:
                 query_item.append(map(float, q))
                 # query_item = [query_item]
 
-            a, c, nq, nd, s, ens = sess.run([optimizer, cross_entropy, normal_query, normal_document, similar_score, entropy],
-                            feed_dict={query: query_item, documents: all_document, true_score: label_score, drop_prob: 0.5})
+            a, c, nq, nd, s = sess.run([optimizer, score_distance, normal_query, normal_document, similar_score],
+                            feed_dict={query: query_item, documents: all_document, true_score: label_score})
 
             # Compute average loss
             avg_cost += c
@@ -148,7 +149,7 @@ with tf.Session() as sess:
             # print 'document_dimension', nd
             # print 'similar_score', s
             print 'cost ', c/30
-            print 'entropy', ens
+
         # Display logs per epoch step
         # if epoch % display_step == 0:
         print "Epoch:", '%04d' % (epoch + 1), "cost=", \

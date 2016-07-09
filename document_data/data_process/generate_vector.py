@@ -58,7 +58,7 @@ def generate_vocabulary_list():
             for key in vocab_dict:
                 if vocab_dict[key] == value:
                     vocab_list.append(key)
-            if len(vocab_list) > 3000:
+            if len(vocab_list) > 1000:
                 break
 
         # write vocab_list to mongoDB
@@ -185,5 +185,3 @@ if __name__ == "__main__":
     # db = client.webSearch
     # a = db.voc_list.find()
     # print len(a[0]['vocabulary_list'])
-
-

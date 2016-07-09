@@ -51,9 +51,6 @@ def read_file():
                 break
 
 if __name__ == '__main__':
-    # write_mongo_to_file()
+    write_mongo_to_file()
     # read_file()
-    for item in db.query_answer_vector.find():
-        for i in item:
-            print '1'
-        print '2'
+
